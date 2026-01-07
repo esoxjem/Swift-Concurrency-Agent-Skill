@@ -8,6 +8,42 @@ description: Expert guidance on Swift Concurrency best practices, patterns, and 
 
 This skill provides expert guidance on Swift Concurrency, covering modern async/await patterns, actors, tasks, Sendable conformance, and migration to Swift 6. Use this skill to help developers write safe, performant concurrent code and navigate the complexities of Swift's structured concurrency model.
 
+## Agent Behavior Contract (Follow These Rules)
+
+1. Analyze the project/package file to find out which Swift language mode (Swift 5.x vs Swift 6) and which Xcode/Swift toolchain is used when advice depends on it.
+2. Before proposing fixes, identify the isolation boundary: `@MainActor`, custom actor, actor instance isolation, or nonisolated.
+3. Do not recommend `@MainActor` as a blanket fix. Justify why main-actor isolation is correct for the code.
+4. Prefer structured concurrency (child tasks, task groups) over unstructured tasks. Use `Task.detached` only with a clear reason.
+5. If recommending `@preconcurrency`, `@unchecked Sendable`, or `nonisolated(unsafe)`, require:
+   - a documented safety invariant
+   - a follow-up ticket to remove or migrate it
+6. For migration work, optimize for minimal blast radius (small, reviewable changes) and add verification steps.
+7. Course references are for deeper learning only. Use them sparingly and only when they clearly help answer the developer’s question.
+
+## Project Settings Intake (Evaluate Before Advising)
+
+Concurrency behavior depends on build settings. Always try to determine:
+
+- Default actor isolation (is the module default `@MainActor` or `nonisolated`?)
+- Strict concurrency checking level (minimal/targeted/complete)
+- Whether upcoming features are enabled (especially `NonisolatedNonsendingByDefault`)
+- Swift language mode (Swift 5.x vs Swift 6) and SwiftPM tools version
+
+### Manual checks (no scripts)
+
+- SwiftPM:
+  - Check `Package.swift` for `.defaultIsolation(MainActor.self)`.
+  - Check `Package.swift` for `.enableUpcomingFeature("NonisolatedNonsendingByDefault")`.
+  - Check for strict concurrency flags: `.enableExperimentalFeature("StrictConcurrency=targeted")` (or similar).
+  - Check tools version at the top: `// swift-tools-version: ...`
+- Xcode projects:
+  - Search `project.pbxproj` for:
+    - `SWIFT_DEFAULT_ACTOR_ISOLATION`
+    - `SWIFT_STRICT_CONCURRENCY`
+    - `SWIFT_UPCOMING_FEATURE_` (and/or `SWIFT_ENABLE_EXPERIMENTAL_FEATURES`)
+
+If any of these are unknown, ask the developer to confirm them before giving migration-sensitive guidance.
+
 ## Quick Decision Tree
 
 When a developer needs concurrency guidance, follow this decision tree:
@@ -37,6 +73,21 @@ When a developer needs concurrency guidance, follow this decision tree:
 
 7. **Memory issues with tasks?**
    - Read `references/memory-management.md` for retain cycle prevention
+
+## Triage-First Playbook (Common Errors -> Next Best Move)
+
+- "Sending value of non-Sendable type ... risks causing data races"
+  - First: identify where the value crosses an isolation boundary
+  - Then: use `references/sendable.md` and `references/threading.md` (especially Swift 6.2 behavior changes)
+- "Main actor-isolated ... cannot be used from a nonisolated context"
+  - First: decide if it truly belongs on `@MainActor`
+  - Then: use `references/actors.md` (global actors, `nonisolated`, isolated parameters) and `references/threading.md` (default isolation)
+- "Class property 'current' is unavailable from asynchronous contexts" (Thread APIs)
+  - Use `references/threading.md` to avoid thread-centric debugging and rely on isolation + Instruments
+- XCTest async errors like "wait(...) is unavailable from asynchronous contexts"
+  - Use `references/testing.md` (`await fulfillment(of:)` and Swift Testing patterns)
+- Core Data concurrency warnings/errors
+  - Use `references/core-data.md` (DAO/`NSManagedObjectID`, default isolation conflicts)
 
 ## Core Patterns Reference
 
@@ -161,6 +212,18 @@ Load these files as needed for specific topics:
 5. **Handle cancellation** - Check Task.isCancelled in long-running operations
 6. **Avoid blocking** - Never use semaphores or locks in async contexts
 7. **Test concurrent code** - Use proper async test methods and consider timing issues
+
+## Verification Checklist (When You Change Concurrency Code)
+
+- Confirm build settings (default isolation, strict concurrency, upcoming features) before interpreting diagnostics.
+- After refactors:
+  - Run tests, especially concurrency-sensitive ones (see `references/testing.md`).
+  - If performance-related, verify with Instruments (see `references/performance.md`).
+  - If lifetime-related, verify deinit/cancellation behavior (see `references/memory-management.md`).
+
+## Glossary
+
+See `references/glossary.md` for quick definitions of core concurrency terms used across this skill.
 
 ---
 
