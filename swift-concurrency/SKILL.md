@@ -30,9 +30,6 @@ When analyzing Swift projects for concurrency issues:
    - Use `Grep` for `SWIFT_UPCOMING_FEATURE_` to find enabled upcoming features
 
 
-3. **Build Verification**
-   - Use Xcode build tools to verify concurrency changes compile cleanly
-   - Run tests to ensure no regressions in async behavior
 
 ## Project Settings Intake (Evaluate Before Advising)
 
